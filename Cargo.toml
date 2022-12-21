@@ -1,5 +1,5 @@
 [package]
-name = "uem-reader-rs"
+name = "uem-reader"
 version = "0.1.0"
 edition = "2022"
 
