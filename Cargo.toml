@@ -8,3 +8,6 @@ edition = "2021"
 [dependencies]
 rusb = "0.9"
 usb-ids = "0.2.4"
+enum-iterator = "1.2.0"
+thiserror = "1.0"
+rand = "0.8.5"

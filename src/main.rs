@@ -1,21 +1,63 @@
 use rusb::{
-    ConfigDescriptor, DeviceDescriptor, DeviceHandle, DeviceList, EndpointDescriptor,
-    InterfaceDescriptor, Language, Result, Device, Speed, UsbContext, Direction, GlobalContext,
+    /*ConfigDescriptor, DeviceDescriptor,*/ DeviceHandle, DeviceList, /*EndpointDescriptor,*/
+    /*InterfaceDescriptor,*/ Language, Result, Device, /*Speed,*/ UsbContext, Direction, GlobalContext,
 };
 
-use usb_ids::{self, FromId};
+//use usb_ids;//::{self};//, FromId};
 
-use enum_iterator::{all, cardinality, first, last, next, previous, reverse_all, Sequence};
+use enum_iterator::{all, Sequence};//, cardinality, first, last, next, previous, reverse_all};
 
-use core::{time};//, slice::SlicePattern};
-use std::{time::Duration, fmt::Error, thread};
+use thiserror::Error;
+
+use rand::Rng;
+
+//use core::{time};//, slice::SlicePattern};
+use std::{time::Duration};//, fmt::Error, thread};
 
 const UEM_VID: u16 = 0xC251;
 const UEM_PID: u16 = 0x130A;
 
+#[derive(Error, Debug)]
+pub enum UemGeneralError {
+    #[error("Operation in progress")]
+    OperationPending,
+    #[error("Feature not supported")]
+    UnsupportedFeature,
+    #[error("Communication data lost")]
+    CommunicationDataLost,
+    #[error("Incorrect parameter")]
+    IncorrectParameter,
+    #[error("Unexpected error")]
+    Unexpected,
+    #[error("Access error")]
+    Access,
+    #[error("Not transacted")]
+    NotTransacted,
+    #[error("Incorrect reader name")]
+    ReaderIncorrectName,
+    #[error("Failed to connect to the reader")]
+    ReaderConnectionFailed,
+    #[error("Reader not connected")]
+    ReaderNotConnected,
+    #[error("Reader already connected")]
+    ReaderAlreadyConnected,
+    #[error("Incorrect reader response")]
+    ReaderIncorrectResponse,
+    #[error("Reader not responding")]
+    ReaderResponseFailure,
+    #[error("Reader returned error code")]
+    ReaderUnsuccessful(UemInternalError, Option<Vec<u8>>),
+    #[error("SAM: APDU error")]
+    SamApdu,
+    #[error("SAM: Invalid MAC")]
+    SamInvalidMac,
+    #[error("SAM: Authentication failed")]
+    SamAuthenticationFailed,
+}
+
 #[repr(u8)]
 #[derive(Debug, PartialEq, Sequence, Clone)]
-pub enum UemError {
+pub enum UemInternalError {
     NoTag = 0xFF,
     Crc = 0xFE,
     WrongKey = 0xFC,
@@ -94,33 +136,38 @@ pub enum UemError {
     UnsupportedParameter = 0x83,
     IncompleteChaining = 0x82,
     Temperature = 0x81,
-    Unknown = 0x80
+    Unknown = 0x80,
 }
 
-impl UemError {
-    pub fn from_byte(code: u8) -> UemError {
-        for err in all::<UemError>() {
+impl UemInternalError {
+    pub fn from_byte(code: u8) -> Self {
+        for err in all::<Self>() {
             if err.clone() as u8 == code {
                 return err;
             }
         }
-        UemError::Unknown
+        Self::Unknown
     }
 }
 
 #[derive(Default)]
-struct UsbDevice<T: UsbContext> {
+pub struct UemReader<T: UsbContext> {
     handle: Option<DeviceHandle<T>>,
     device: Option<Device<T>>,
     language: Option<Language>,
     timeout: Duration,
     ep_in_addr: u8,
     ep_out_addr: u8,
+    ncommand: u8,
 }
 
-fn find_readers() -> Result<Vec<UsbDevice<GlobalContext>>> {
-    let mut uem_devices: Vec<UsbDevice<GlobalContext>> = Vec::new();
-    for device in DeviceList::new()?.iter() {
+pub fn find_readers() -> Vec<UemReader<GlobalContext>> {
+    let mut uem_readers: Vec<UemReader<GlobalContext>> = Vec::new();
+    let devices = DeviceList::new();
+    if let Err(_) = devices {
+        return uem_readers;
+    }
+    for device in devices.unwrap().iter() {
         let device_desc = match device.device_descriptor() {
             Ok(d) => d,
             Err(_) => continue,
@@ -131,7 +178,8 @@ fn find_readers() -> Result<Vec<UsbDevice<GlobalContext>>> {
             continue
         }
 
-        let mut usb_device = UsbDevice {
+        let mut uem_reader = UemReader {
+            ncommand: rand::thread_rng().gen(),
             ..Default::default()
         };
 
@@ -145,18 +193,18 @@ fn find_readers() -> Result<Vec<UsbDevice<GlobalContext>>> {
                 for interface_desc in interface.descriptors() {
                     for endpoint_desc in interface_desc.endpoint_descriptors() {
                         match endpoint_desc.direction() {
-                            Direction::In => usb_device.ep_in_addr = endpoint_desc.address(),
-                            Direction::Out => usb_device.ep_out_addr = endpoint_desc.address()
+                            Direction::In => uem_reader.ep_in_addr = endpoint_desc.address(),
+                            Direction::Out => uem_reader.ep_out_addr = endpoint_desc.address()
                         }
                     }
                 }
             }
         }
-        usb_device.device = Some(device);
-        uem_devices.push(usb_device);       
+        uem_reader.device = Some(device);
+        uem_readers.push(uem_reader);       
     }
 
-    Ok(uem_devices)
+    uem_readers
 }
 
 fn crc16_ex(buf: &Vec<u8>, start: usize, count: usize) -> Vec<u8> {
@@ -165,7 +213,7 @@ fn crc16_ex(buf: &Vec<u8>, start: usize, count: usize) -> Vec<u8> {
     for pos in start..start + count {
         crc ^= buf[pos] as u16 & 0x00FF_u16;   // XOR byte into least sig. byte of crc
 
-        for _ in 0..7 {    // Loop over each bit
+        for _ in 0..8 {    // Loop over each bit
             if (crc & 0x0001) != 0 {      // If the LSB is set
                 crc >>= 1;                    // Shift right and XOR 0x8408
                 crc ^= 0x8408;
@@ -215,111 +263,201 @@ fn unbyte_stuff(stuffed_data: &Vec<u8>) -> Vec<u8> {
     return data;
 }
 
-fn wrap_command(data: &Vec<u8>) -> Vec<u8> {
-    static mut n_command: u8 = 0x00;
 
-    let mut raw_data: Vec<u8> = vec![];
 
-    raw_data.push(0x00);
-    unsafe {
-        raw_data.push(n_command);
-        n_command += 1;
-    }
-    //if ((reader != null) && reader.Reader.encryptedMode) {
-    //    rawData.write(0x00);
-    //    data = AES.encryptChannel(data, reader);
-    //    if (data == null)
-    //        return null;
-    //}
-    let mut tmp_v = vec![];
-    data.clone_into(&mut tmp_v);
-    raw_data.append(&mut tmp_v);
+impl<T: UsbContext> UemReader<T> {
+    pub fn open(&mut self) -> core::result::Result<(), UemGeneralError> {
+        if self.handle.is_some() {
+            return Err(UemGeneralError::ReaderAlreadyConnected);
+        }
+        // if let Some(mut uem_reader) = uem_readers.get_mut(0) {
+            //usb_device.handle = usb_device.device.take().unwrap().open().ok();
+            if let Ok(h) = self.device.take().unwrap().open() {
+                if let Ok(l) = h.read_languages(TIMEOUT) {
+                   if !l.is_empty() {
+                    self.language = Some(l[0]);
+                   }
+                }
+                self.handle = Some(h);
+                self.timeout = TIMEOUT;
+                return Ok(())
+            }
+        // }
+        Err(UemGeneralError::ReaderConnectionFailed)
+    }        
 
-    let mut fsc = crc16(&raw_data);
-    //fsc.clone_into(&mut tmp_v);
-    raw_data.append(&mut fsc);
+    pub fn close(&mut self) -> core::result::Result<(), UemGeneralError> {
+        if self.handle.is_none() {
+            return Err(UemGeneralError::ReaderNotConnected);
+        }
+        if let Some(h) = self.handle.take() {
+            self.device = Some(h.device());
+            return Ok(())
+        }
+        return Ok(())
+    }
 
-    let mut tmp_data = byte_stuff(&raw_data);
-    let mut raw_data: Vec<u8> = vec![];
-    raw_data.reserve(2 + tmp_data.len());
-    raw_data.push(0xFD);
-    raw_data.append(&mut tmp_data);
-    //raw_data.reserve(2);
-    raw_data.push(0xFE);
-    println!("{:?}", raw_data);
-    return raw_data;
-}
+    pub fn transceive(&mut self, command: Vec<u8>) -> core::result::Result<Vec<u8>, UemGeneralError> {
+        
+        if self.handle.is_none() {
+            return Err(UemGeneralError::ReaderNotConnected);
+        }
+        if command.is_empty() {
+            return Err(UemGeneralError::IncorrectParameter);
+        }
 
-fn unwrap_response(raw_data: &Vec<u8>) -> core::result::Result<Vec<u8>, UemError> {
-    let mut raw_data = unbyte_stuff(raw_data);
-    if (raw_data[0] & 0xFF) != 0xFD {
-        return Err(UemError::NoTag);
+        // int TIMEOUT = 0;
+        let send_buffer = self.wrap_command(&command);
+        if send_buffer.is_empty() {
+            return Err(UemGeneralError::IncorrectParameter);
+        }
+
+        let handle = self.handle.as_mut().unwrap();
+
+        handle.claim_interface(0).map_err(|_| UemGeneralError::Access)?;
+
+        let mut res = handle.write_bulk(self.ep_out_addr, send_buffer.as_slice(), TIMEOUT);
+
+        if res.is_err() {
+            return Err(UemGeneralError::NotTransacted);
+        }
+
+        let mut receive_buffer = vec![0u8; 256];
+
+        res = handle.read_bulk(self.ep_in_addr, &mut receive_buffer, TIMEOUT);
+
+        handle.release_interface(0).map_err(|_| UemGeneralError::Access)?;
+
+        if res.is_err() {
+            return Err(UemGeneralError::ReaderResponseFailure);
+        }
+
+        let response_length = res.unwrap();
+
+        if response_length <= 6 {
+            return Err(UemGeneralError::ReaderResponseFailure);
+        }
+
+        let resp = self.unwrap_response(&receive_buffer[..response_length].to_vec());
+
+        if resp.is_err() {
+            return Err(UemGeneralError::ReaderUnsuccessful(resp.unwrap_err(), None));
+        }
+
+        let response = resp.unwrap();
+
+        if (response.len() < 2) || (response[0] != command[0]) {
+            return Err(UemGeneralError::ReaderIncorrectResponse);
+        }
+
+        if response[1] != 0x00 {
+            if response.len() == 2 {
+                return Err(UemGeneralError::ReaderUnsuccessful(UemInternalError::from_byte(response[1]), None));
+            }
+            return Err(UemGeneralError::ReaderUnsuccessful(UemInternalError::from_byte(response[1]), Some(response[2..].to_vec())));
+        }
+
+        Ok(response)
     }
-    if (raw_data[raw_data.len()-1] & 0xFF) != 0xFE {
-        return Err(UemError::NoTag);
+
+    fn wrap_command(&mut self, data: &Vec<u8>) -> Vec<u8> {
+    
+        let mut raw_data: Vec<u8> = vec![];
+    
+        raw_data.push(0x00);
+        raw_data.push(self.ncommand);
+        if self.ncommand == u8::MAX {
+            self.ncommand = 0;
+        }
+        self.ncommand += 1;
+        //if ((reader != null) && reader.Reader.encryptedMode) {
+        //    rawData.write(0x00);
+        //    data = AES.encryptChannel(data, reader);
+        //    if (data == null)
+        //        return null;
+        //}
+        let mut tmp_v = vec![];
+        data.clone_into(&mut tmp_v);
+        raw_data.append(&mut tmp_v);
+    
+        let mut fsc = crc16(&raw_data);
+        //fsc.clone_into(&mut tmp_v);
+        raw_data.append(&mut fsc);
+    
+        let mut tmp_data = byte_stuff(&raw_data);
+        let mut raw_data: Vec<u8> = vec![];
+        raw_data.reserve(2 + tmp_data.len());
+        raw_data.push(0xFD);
+        raw_data.append(&mut tmp_data);
+        //raw_data.reserve(2);
+        raw_data.push(0xFE);
+        println!("{:?}", raw_data);
+        return raw_data;
     }
-    let mut fsc = crc16(&raw_data[1..raw_data.len()-3].to_vec());
-    if (fsc[0] & 0xFF) != (raw_data[raw_data.len()-3] & 0xFF) {
-        return Err(UemError::CRC);//  Err(UemError::CRC);
+    
+    fn unwrap_response(&mut self, raw_data: &Vec<u8>) -> core::result::Result<Vec<u8>, UemInternalError> {
+        let raw_data = unbyte_stuff(raw_data);
+        if (raw_data[0] & 0xFF) != 0xFD {
+            return Err(UemInternalError::Protocol);
+        }
+        if (raw_data[raw_data.len()-1] & 0xFF) != 0xFE {
+            return Err(UemInternalError::Protocol);
+        }
+        let fsc = crc16(&raw_data[1..raw_data.len()-3].to_vec());
+        if (fsc[0] & 0xFF) != (raw_data[raw_data.len()-3] & 0xFF) {
+            return Err(UemInternalError::Crc);//  Err(UemError::CRC);
+        }
+        if  (fsc[1] & 0xFF) != (raw_data[raw_data.len()-2] & 0xFF) {
+            return Err(UemInternalError::Crc);
+        }
+        let data = raw_data[3..raw_data.len()-3].to_vec();
+        //if (reader != null) && reader.Reader._encryptedMode && (data[0] == 0x00) {
+        //    data = AES.decryptChannel(Arrays.copyOfRange(data, 1, data.length), reader);
+        //}
+        return Ok(data);
     }
-    if  (fsc[1] & 0xFF) != (raw_data[raw_data.len()-2] & 0xFF) {
-        return Err(UemError::CRC);
-    }
-    let data = raw_data[3..raw_data.len()-3].to_vec();
-    //if (reader != null) && reader.Reader._encryptedMode && (data[0] == 0x00) {
-    //    data = AES.decryptChannel(Arrays.copyOfRange(data, 1, data.length), reader);
-    //}
-    return Ok(data);
 }
 
 const TIMEOUT: Duration = Duration::from_secs(1);
 
 fn main() -> Result<()> {
-    let mut uem_readers = find_readers().unwrap();
+    let mut uem_readers = find_readers();
 
     if uem_readers.is_empty() {
         return Err(rusb::Error::NoDevice);
     }
 
-    if let Some(mut usb_device) = uem_readers.get_mut(0) {
-        //usb_device.handle = usb_device.device.take().unwrap().open().ok();
-        if let Ok(h) = usb_device.device.take().unwrap().open() {
-            //if let Ok(l) = h.read_languages(TIMEOUT) {
-            //    if !l.is_empty() {
-            //        usb_device.language = Some(l[0]);
-            //    }
-            //}
-            usb_device.handle = Some(h);
-            usb_device.timeout = TIMEOUT;
-        }
-    }
+    let uem_reader = uem_readers.get_mut(0).ok_or(rusb::Error::NoDevice)?;
 
-    if let Some(mut opened_dev) = uem_readers.get_mut(0) {
-        if let Some(mut handle) = opened_dev.handle.as_mut() {
+    uem_reader.open().map_err(|_| rusb::Error::Busy)?;
+
+    uem_reader.transceive(vec![0x05_u8, 0x01_u8]).map_err(|_| rusb::Error::Io)?;
+
+    uem_reader.close().map_err(|_| rusb::Error::Io)?;
+
+    // if let Some(mut opened_dev) = uem_readers.get_mut(0) {
+        // if let Some(mut handle) = uem_reader.handle.as_mut() {
             //if opened_dev.handle.kernel_driver_active(0).unwrap() {
                 //IsSystemDriver = true;
             //    opened_dev.handle.detach_kernel_driver(0);
             //}
-            handle.claim_interface(0)?;
-
             //handle.write_bulk(opened_dev.ep_out_addr, &[0xFD, 0x00, 0x32, 0x05, 0x01, 0xF9, 0xA0, 0xFE], TIMEOUT);
-            let mut res = handle.write_bulk(opened_dev.ep_out_addr, wrap_command(&vec![0x05_u8, 0x01_u8]).as_slice(), TIMEOUT);
-            println!("{:?}", res);
-            let mut buf = vec![0u8; 256];
-            res = handle.read_bulk(opened_dev.ep_in_addr, &mut buf, TIMEOUT);
-            println!("{:?}", res);
-            if let Ok(count) = res {
-                println!("{:?}", buf[..count].to_vec());
-                let res = unwrap_response(&buf[..count].to_vec());
-                println!("{:?}", res);
-            }
-            thread::sleep(time::Duration::from_millis(200));
-            //handle.write_bulk(opened_dev.ep_out_addr, &[0xFD, 0x00, 0x35, 0x05, 0x01, 0xFC, 0x2C, 0xFE], TIMEOUT);
-            res = handle.write_bulk(opened_dev.ep_out_addr, wrap_command(&vec![0x05_u8, 0x01_u8]).as_slice(), TIMEOUT);
-            println!("{:?}", res);
-            handle.release_interface(0)?;
-        }
-    }
+            // let mut res = handle.write_bulk(uem_reader.ep_out_addr, wrap_command(&vec![0x05_u8, 0x01_u8]).as_slice(), TIMEOUT);
+            // println!("{:?}", res);
+            // let mut buf = vec![0u8; 256];
+            // res = handle.read_bulk(uem_reader.ep_in_addr, &mut buf, TIMEOUT);
+            // println!("{:?}", res);
+            // if let Ok(count) = res {
+            //     println!("{:?}", buf[..count].to_vec());
+            //     let res = unwrap_response(&buf[..count].to_vec());
+            //     println!("{:?}", res);
+            // }
+            // thread::sleep(time::Duration::from_millis(200));
+            // //handle.write_bulk(opened_dev.ep_out_addr, &[0xFD, 0x00, 0x35, 0x05, 0x01, 0xFC, 0x2C, 0xFE], TIMEOUT);
+            // res = handle.write_bulk(uem_reader.ep_out_addr, wrap_command(&vec![0x05_u8, 0x01_u8]).as_slice(), TIMEOUT);
+            // println!("{:?}", res);
+        // }
+    // }
 
     Ok(())
 }
