@@ -2,8 +2,12 @@ use enum_iterator::{all, Sequence};//, cardinality, first, last, next, previous,
 
 use thiserror::Error;
 
+type UemGeneralResult<T> = core::result::Result<T, UemError>;
+pub type UemResult = UemGeneralResult<()>;
+pub type UemResultVec = UemGeneralResult<Vec<u8>>;
+
 #[derive(Error, Debug)]
-pub enum UemGeneralError {
+pub enum UemError {
     #[error("Operation in progress")]
     OperationPending,
     #[error("Feature not supported")]

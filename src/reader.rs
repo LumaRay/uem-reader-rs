@@ -14,10 +14,14 @@ use rand::Rng;
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
+// #![doc = include_str!("../README.md")]
+
 const UEM_VID: u16 = 0xC251;
 const UEM_PID: u16 = 0x130A;
 
 const TIMEOUT: Duration = Duration::from_secs(1);
+
+type UemReaders = Vec<UemReader<GlobalContext>>;
 
 #[derive(Default)]
 pub struct UemReader<T: UsbContext> {
@@ -28,13 +32,15 @@ pub struct UemReader<T: UsbContext> {
     ep_in_addr: u8,
     ep_out_addr: u8,
     ncommand: u8,
-    pub commands: Vec<Rc<RefCell<Commands<T>>>>,
+    // pub commands: Vec<Rc<RefCell<Commands<T>>>>,
+    pub commands: Box<Commands<T>>,
 }
 
 impl<T: UsbContext> UemReader<T> {
-    pub fn open(&mut self) -> core::result::Result<(), UemGeneralError> {
+    #![warn(missing_docs)]
+    pub fn open(&mut self) -> UemResult {
         if self.handle.is_some() {
-            return Err(UemGeneralError::ReaderAlreadyConnected);
+            return Err(UemError::ReaderAlreadyConnected);
         }
         // if let Some(mut uem_reader) = uem_readers.get_mut(0) {
             //usb_device.handle = usb_device.device.take().unwrap().open().ok();
@@ -49,12 +55,13 @@ impl<T: UsbContext> UemReader<T> {
                 return Ok(())
             }
         // }
-        Err(UemGeneralError::ReaderConnectionFailed)
+        Err(UemError::ReaderConnectionFailed)
     }        
 
-    pub fn close(&mut self) -> core::result::Result<(), UemGeneralError> {
+    /// close opened USB interface
+    pub fn close(&mut self) -> core::result::Result<(), UemError> {
         if self.handle.is_none() {
-            return Err(UemGeneralError::ReaderNotConnected);
+            return Err(UemError::ReaderNotConnected);
         }
         if let Some(h) = self.handle.take() {
             self.device = Some(h.device());
@@ -63,64 +70,58 @@ impl<T: UsbContext> UemReader<T> {
         return Ok(())
     }
 
-    pub fn transceive(&mut self, command: Vec<u8>) -> core::result::Result<Vec<u8>, UemGeneralError> {
+    pub fn transceive(&mut self, command: Vec<u8>) -> UemResultVec {
         
         if self.handle.is_none() {
-            return Err(UemGeneralError::ReaderNotConnected);
+            return Err(UemError::ReaderNotConnected);
         }
         if command.is_empty() {
-            return Err(UemGeneralError::IncorrectParameter);
+            return Err(UemError::IncorrectParameter);
         }
 
         // int TIMEOUT = 0;
         let send_buffer = self.wrap_command(&command);
         if send_buffer.is_empty() {
-            return Err(UemGeneralError::IncorrectParameter);
+            return Err(UemError::IncorrectParameter);
         }
 
         let handle = self.handle.as_mut().unwrap();
 
-        handle.claim_interface(0).map_err(|_| UemGeneralError::Access)?;
+        handle.claim_interface(0).map_err(|_| UemError::Access)?;
 
         let mut res = handle.write_bulk(self.ep_out_addr, send_buffer.as_slice(), TIMEOUT);
 
         if res.is_err() {
-            return Err(UemGeneralError::NotTransacted);
+            return Err(UemError::NotTransacted);
         }
 
         let mut receive_buffer = vec![0u8; 256];
 
         res = handle.read_bulk(self.ep_in_addr, &mut receive_buffer, TIMEOUT);
 
-        handle.release_interface(0).map_err(|_| UemGeneralError::Access)?;
+        handle.release_interface(0).map_err(|_| UemError::Access)?;
 
         if res.is_err() {
-            return Err(UemGeneralError::ReaderResponseFailure);
+            return Err(UemError::ReaderResponseFailure);
         }
 
         let response_length = res.unwrap();
 
         if response_length <= 6 {
-            return Err(UemGeneralError::ReaderResponseFailure);
+            return Err(UemError::ReaderResponseFailure);
         }
 
-        let resp = self.unwrap_response(&receive_buffer[..response_length].to_vec());
-
-        if resp.is_err() {
-            return Err(UemGeneralError::ReaderUnsuccessful(resp.unwrap_err(), None));
-        }
-
-        let response = resp.unwrap();
+        let response = self.unwrap_response(&receive_buffer[..response_length].to_vec())?;
 
         if (response.len() < 2) || (response[0] != command[0]) {
-            return Err(UemGeneralError::ReaderIncorrectResponse);
+            return Err(UemError::ReaderIncorrectResponse);
         }
 
         if response[1] != 0x00 {
             if response.len() == 2 {
-                return Err(UemGeneralError::ReaderUnsuccessful(UemInternalError::from_byte(response[1]), None));
+                return Err(UemError::ReaderUnsuccessful(UemInternalError::from_byte(response[1]), None));
             }
-            return Err(UemGeneralError::ReaderUnsuccessful(UemInternalError::from_byte(response[1]), Some(response[2..].to_vec())));
+            return Err(UemError::ReaderUnsuccessful(UemInternalError::from_byte(response[1]), Some(response[2..].to_vec())));
         }
 
         Ok(response)
@@ -161,20 +162,20 @@ impl<T: UsbContext> UemReader<T> {
         return raw_data;
     }
     
-    fn unwrap_response(&mut self, raw_data: &Vec<u8>) -> core::result::Result<Vec<u8>, UemInternalError> {
+    fn unwrap_response(&mut self, raw_data: &Vec<u8>) -> UemResultVec {
         let raw_data = unbyte_stuff(raw_data);
         if (raw_data[0] & 0xFF) != 0xFD {
-            return Err(UemInternalError::Protocol);
+            return Err(UemError::ReaderUnsuccessful(UemInternalError::Protocol, None));
         }
         if (raw_data[raw_data.len()-1] & 0xFF) != 0xFE {
-            return Err(UemInternalError::Protocol);
+            return Err(UemError::ReaderUnsuccessful(UemInternalError::Protocol, None));
         }
         let fsc = crc16(&raw_data[1..raw_data.len()-3].to_vec());
         if (fsc[0] & 0xFF) != (raw_data[raw_data.len()-3] & 0xFF) {
-            return Err(UemInternalError::Crc);//  Err(UemError::CRC);
+            return Err(UemError::ReaderUnsuccessful(UemInternalError::Crc, None));//  Err(UemError::CRC);
         }
         if  (fsc[1] & 0xFF) != (raw_data[raw_data.len()-2] & 0xFF) {
-            return Err(UemInternalError::Crc);
+            return Err(UemError::ReaderUnsuccessful(UemInternalError::Crc, None));
         }
         let data = raw_data[3..raw_data.len()-3].to_vec();
         //if (reader != null) && reader.Reader._encryptedMode && (data[0] == 0x00) {
@@ -184,8 +185,8 @@ impl<T: UsbContext> UemReader<T> {
     }
 }
 
-pub fn find_readers() -> Vec<UemReader<GlobalContext>> {
-    let mut uem_readers: Vec<UemReader<GlobalContext>> = Vec::new();
+pub fn find_readers() -> UemReaders {
+    let mut uem_readers: UemReaders = Vec::new();
     let devices = DeviceList::new();
     if let Err(_) = devices {
         return uem_readers;
@@ -205,7 +206,9 @@ pub fn find_readers() -> Vec<UemReader<GlobalContext>> {
             ncommand: rand::thread_rng().gen(),
             ..Default::default()
         };
-        uem_reader.commands = vec![Rc::new(RefCell::new(Commands{reader: Rc::downgrade(&Rc::new(RefCell::new(uem_reader)))}))];
+        // uem_reader.commands = vec![Rc::new(RefCell::new(Commands{reader: Rc::downgrade(&Rc::new(RefCell::new(uem_reader)))}))];
+        // uem_reader.commands = Commands{reader: std::ptr::null()};
+        uem_reader.commands = Box::new(Commands{reader: &mut uem_reader});
 
         for n in 0..device_desc.num_configurations() {
             let config_desc = match device.config_descriptor(n) {
@@ -229,4 +232,16 @@ pub fn find_readers() -> Vec<UemReader<GlobalContext>> {
     }
 
     uem_readers
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+    #[test]
+    fn it_works() {
+        let readers = find_readers();
+        assert!(!readers.is_empty());
+        let result = 2 + 2;
+        assert_eq!(result, 4);
+    }
 }
