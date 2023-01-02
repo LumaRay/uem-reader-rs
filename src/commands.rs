@@ -43,3 +43,114 @@ impl<T: UsbContext> Commands<T> {
     }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+//use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+
+#[derive(Debug)]
+struct Commands<'a> {
+    toaster: &'a Arc<Mutex<Toaster>>,
+}
+
+impl<'a> Commands<'a> {
+    fn new(tr: &'a Arc<Mutex<Toaster>>) -> Self {
+        Commands {toaster: tr}
+    }
+    
+    fn toast(&self) {
+        self.toaster.lock().unwrap().count();
+        println!("toasting! {:?}", self.toaster.lock().unwrap().counter);
+    }
+}
+
+trait MyRunner {
+    //fn new() -> Self;
+    fn run(&self);
+    fn commands(&self) -> Commands;
+}
+
+#[derive(Debug, Default)]
+struct Toaster {
+    counter: i32,
+    //cmds: Option<Commands>,
+}
+
+impl Toaster {
+    fn new() -> Arc<Mutex<Toaster>> {
+        let am_toaster = Arc::new(Mutex::new(Self{..Default::default()}));
+//        am_toaster.lock().unwrap().cmds = Some(Commands { toaster: am_toaster.clone() });
+        am_toaster
+    }
+    
+    fn count(&mut self) {
+        self.counter += 1;
+    }
+}
+
+impl MyRunner for Arc<Mutex<Toaster>> {
+    //fn new() -> Self {
+    //    Toaster::new()
+    //}
+    
+    fn run(&self) {
+        println!("run!");
+    }
+    
+    fn commands(&self) -> Commands {
+        Commands::new(self)
+    }
+}
+
+fn main() {
+    let tmp = Toaster::new();
+    //let tmp2 = tmp::new();
+    println!("Hello, world!");
+    
+    tmp.run();
+    
+    //tmp.lock().unwrap().cmds.as_ref().unwrap().toast();
+    
+    tmp.commands().toast();
+    tmp.commands().toast();
+    tmp.commands().toast();
+    tmp.commands().toast();
+    
+    let tc = tmp.commands();
+    tc.toast();
+    tc.toast();
+    tc.toast();
+}
+*/
