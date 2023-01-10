@@ -1,16 +1,18 @@
 use std::sync::{Arc, Mutex};
 
 use rusb::{
-    DeviceHandle, DeviceList,
-    Language, Result, Device, UsbContext, 
-    Direction, GlobalContext,
+    DeviceHandle, DeviceList, Language, 
+    Device, UsbContext, Direction,
 };
 
 use std::{time::Duration};
 
 use rand::Rng;
 
-use crate::{reader::{CommandsCounter, UemReaders, UemReaderInternal, TIMEOUT, prepare_command, parse_response}, errors::{UemResult, UemError, UemInternalError, UemResultVec}};
+//use crate::{reader::{CommandsCounter, UemReaders, UemReaderInternal, TIMEOUT, prepare_command, parse_response}, errors::{UemResult, UemError, UemInternalError, UemResultVec}};
+use crate::reader::*;
+//use crate::reader_usb::find_usb_readers as _find_usb_readers;
+use crate::errors::*;
 
 const UEM_VID: u16 = 0xC251;
 const UEM_PID: u16 = 0x130A;
@@ -124,7 +126,7 @@ impl<T: UsbContext> UemReaderInternal for ReaderUsb<T> {
         Ok(())
     }
 
-    fn transceive(&mut self, command: Vec<u8>) -> UemResultVec {
+    fn send(&mut self, command: Vec<u8>) -> UemResultVec {
         
         if self.handle.is_none() {
             return Err(UemError::ReaderNotConnected);

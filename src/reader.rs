@@ -1,10 +1,10 @@
 use crate::errors::*;
 use crate::helpers::*;
-use crate::commands::*;
+//use crate::commands::*;
 
 use std::sync::{Arc, Mutex};
 
-
+pub use crate::reader_usb::find_usb_readers;
 
 use std::{time::Duration};
 
@@ -18,7 +18,7 @@ pub type UemReaders = Vec<UemReader>;
 pub trait UemReaderInternal {
     fn open(&mut self) -> UemResult;
     fn close(&mut self) -> core::result::Result<(), UemError>;
-    fn transceive(&mut self, command: Vec<u8>) -> UemResultVec;
+    fn send(&mut self, command: Vec<u8>) -> UemResultVec;
 }
 
 impl UemReaderInternal for UemReader {
@@ -28,10 +28,14 @@ impl UemReaderInternal for UemReader {
     fn close(&mut self) -> core::result::Result<(), UemError> {
         self.lock().unwrap().close()
     }
-    fn transceive(&mut self, command: Vec<u8>) -> UemResultVec {
-        self.lock().unwrap().transceive(command)
+    fn send(&mut self, command: Vec<u8>) -> UemResultVec {
+        self.lock().unwrap().send(command)
     }
 }
+
+// pub fn find_usb_readers() -> UemReaders {
+//     find_usb_readers()
+// }
 
 //#[derive(Debug, Default)]
 //struct UemReader<T: UsbContext> {

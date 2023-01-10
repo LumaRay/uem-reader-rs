@@ -1,40 +1,33 @@
-//use std::sync::{Arc, Mutex};
-
+use crate::commands::*;
+//use crate::commands_reader::*;
 use crate::reader::*;
 use crate::errors::*;
 
-pub struct UemCommands<'a> {
-    // reader: &'a Arc<Mutex<UemReader<T>>>,
+pub struct UemCommandsReader<'a> {
     reader: &'a UemReader,
 }
 
-pub trait UemCommandsTrait {
+pub trait UemCommandsReaderTrait {
     //fn run(&self);
-    fn commands(&mut self) -> UemCommands;
+    fn reader(&mut self) -> UemCommandsReader;
 }
 
-// impl ArcMutexUemReaderCommands for Arc<Mutex<UemReader<T>>> {
-impl UemCommandsTrait for UemReader {
+impl<'a> UemCommandsReaderTrait for UemCommands<'a> {
     //fn run(&self) {
     //    println!("run!");
     //}
     
-    fn commands(&mut self) -> UemCommands {
-        UemCommands::new(self)
+    fn reader(&mut self) -> UemCommandsReader {
+        UemCommandsReader::new(self.get_reader_ref())
     }
-
 }
 
-impl<'a> UemCommands<'a> {
+impl<'a> UemCommandsReader<'a> {
     // fn new(rd: &'a Arc<Mutex<UemReader<T>>>) -> Self {
     fn new(rd: &'a UemReader) -> Self {
-        UemCommands {reader: rd}
+        UemCommandsReader {reader: rd}
     }
     
-    pub(crate) fn get_reader_ref(&self) -> &'a UemReader {
-        self.reader
-    }
-
     // fn toast(&self) {
     //     self.reader.lock().unwrap().count();
     //     println!("toasting! {:?}", self.reader.lock().unwrap().counter);
@@ -48,4 +41,3 @@ impl<'a> UemCommands<'a> {
         raw_reader.send(vec![0x05_u8, count as u8]).map(|_| ())
     }
 }
-
