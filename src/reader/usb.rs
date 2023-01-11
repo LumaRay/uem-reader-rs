@@ -1,17 +1,15 @@
-use std::sync::{Arc, Mutex};
+//! USB reader implementation
 
+use std::sync::{Arc, Mutex};
+use std::{time::Duration};
+use rand::Rng;
 use rusb::{
     DeviceHandle, DeviceList, Language, 
     Device, UsbContext, Direction,
 };
 
-use std::{time::Duration};
-
-use rand::Rng;
-
-//use crate::{reader::{CommandsCounter, UemReaders, UemReaderInternal, TIMEOUT, prepare_command, parse_response}, errors::{UemResult, UemError, UemInternalError, UemResultVec}};
 use crate::reader::*;
-//use crate::reader_usb::find_usb_readers as _find_usb_readers;
+use crate::reader::processing::*;
 use crate::errors::*;
 
 const UEM_VID: u16 = 0xC251;
@@ -26,7 +24,6 @@ struct ReaderUsb<T: UsbContext> {
     ep_in_addr: u8,
     ep_out_addr: u8,
     ncommand: u8,
-//    counter: i32,
 }
 
 impl<T: UsbContext> CommandsCounter for ReaderUsb<T> {
@@ -42,79 +39,27 @@ impl<T: UsbContext> CommandsCounter for ReaderUsb<T> {
     }
 }
 
-pub fn find_usb_readers() -> UemReaders {
-    let mut usb_readers: UemReaders = Vec::new();
-    let devices = DeviceList::new();
-    if let Err(_) = devices {
-        return usb_readers;
-    }
-    for device in devices.unwrap().iter() {
-        let device_desc = match device.device_descriptor() {
-            Ok(d) => d,
-            Err(_) => continue,
-        };
-
-        if  device_desc.vendor_id() != UEM_VID || 
-            device_desc.product_id() != UEM_PID {
-            continue
-        }
-
-        let mut usb_reader = ReaderUsb {
-            ncommand: rand::thread_rng().gen(),
-            ..Default::default()
-        };
-        // uem_reader.commands = vec![Rc::new(RefCell::new(Commands{reader: Rc::downgrade(&Rc::new(RefCell::new(uem_reader)))}))];
-        // uem_reader.commands = Commands{reader: std::ptr::null()};
-        //uem_reader.commands = Box::new(Commands{reader: &mut uem_reader});
-
-        for n in 0..device_desc.num_configurations() {
-            let config_desc = match device.config_descriptor(n) {
-                Ok(c) => c,
-                Err(_) => continue,
-            };
-
-            for interface in config_desc.interfaces() {
-                for interface_desc in interface.descriptors() {
-                    for endpoint_desc in interface_desc.endpoint_descriptors() {
-                        match endpoint_desc.direction() {
-                            Direction::In => usb_reader.ep_in_addr = endpoint_desc.address(),
-                            Direction::Out => usb_reader.ep_out_addr = endpoint_desc.address()
-                        }
-                    }
-                }
-            }
-        }
-        usb_reader.device = Some(device);
-        usb_readers.push(Arc::new(Mutex::new(usb_reader)));
-    }
-
-    usb_readers
-}
-
-// impl<T: UsbContext> ReaderUsb<T> {
 impl<T: UsbContext> UemReaderInternal for ReaderUsb<T> {
-    #![warn(missing_docs)]
+    //#![warn(missing_docs)]
+    /// Open USB interface
     fn open(&mut self) -> UemResult {
         if self.handle.is_some() {
             return Err(UemError::ReaderAlreadyConnected);
         }
-        // if let Some(mut uem_reader) = uem_readers.get_mut(0) {
-            //usb_device.handle = usb_device.device.take().unwrap().open().ok();
-            if let Ok(h) = self.device.take().unwrap().open() {
-                if let Ok(l) = h.read_languages(TIMEOUT) {
-                   if !l.is_empty() {
+        if let Ok(h) = self.device.take().unwrap().open() {
+            if let Ok(l) = h.read_languages(TIMEOUT) {
+                if !l.is_empty() {
                     self.language = Some(l[0]);
-                   }
                 }
-                self.handle = Some(h);
-                self.timeout = TIMEOUT;
-                return Ok(())
             }
-        // }
+            self.handle = Some(h);
+            self.timeout = TIMEOUT;
+            return Ok(())
+        }
         Err(UemError::ReaderConnectionFailed)
     }        
 
-    /// close opened USB interface
+    /// Close opened USB interface
     fn close(&mut self) -> core::result::Result<(), UemError> {
         if self.handle.is_none() {
             return Err(UemError::ReaderNotConnected);
@@ -126,6 +71,7 @@ impl<T: UsbContext> UemReaderInternal for ReaderUsb<T> {
         Ok(())
     }
 
+    /// Send command directly to a USB reader
     fn send(&mut self, command: Vec<u8>) -> UemResultVec {
         
         if self.handle.is_none() {
@@ -135,7 +81,6 @@ impl<T: UsbContext> UemReaderInternal for ReaderUsb<T> {
             return Err(UemError::IncorrectParameter);
         }
 
-        // int TIMEOUT = 0;
         let send_buffer = prepare_command(self, &command);
         if send_buffer.is_empty() {
             return Err(UemError::IncorrectParameter);
@@ -182,4 +127,77 @@ impl<T: UsbContext> UemReaderInternal for ReaderUsb<T> {
 
         Ok(response)
     }
+}
+
+/// Search system for MicroEM readers on USB ports
+/// 
+/// # Example
+/// 
+/// ```no_run
+/// # use uem_reader::reader::*;
+/// # use uem_reader::reader::usb::find_usb_readers;
+/// 
+/// // Search system for USB readers
+/// let mut uem_readers = find_usb_readers();
+/// 
+/// // Quit if no readers found
+/// if uem_readers.is_empty() {
+///     return;
+/// }
+/// 
+/// // Pick the first reader in the vector
+/// let uem_reader = uem_readers.get_mut(0);
+/// 
+/// // Check if the vector returned an option with valid reader object
+/// if uem_reader.is_none() {
+///     return;
+/// }
+/// 
+/// // Unwrap the option
+/// let uem_reader = uem_reader.unwrap();
+/// ```
+pub fn find_usb_readers() -> Vec<UemReader> {
+    let mut usb_readers: Vec<UemReader> = Vec::new();
+    let devices = DeviceList::new();
+    if let Err(_) = devices {
+        return usb_readers;
+    }
+    for device in devices.unwrap().iter() {
+        let device_desc = match device.device_descriptor() {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+
+        if  device_desc.vendor_id() != UEM_VID || 
+            device_desc.product_id() != UEM_PID {
+            continue
+        }
+
+        let mut usb_reader = ReaderUsb {
+            ncommand: rand::thread_rng().gen(),
+            ..Default::default()
+        };
+
+        for n in 0..device_desc.num_configurations() {
+            let config_desc = match device.config_descriptor(n) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+
+            for interface in config_desc.interfaces() {
+                for interface_desc in interface.descriptors() {
+                    for endpoint_desc in interface_desc.endpoint_descriptors() {
+                        match endpoint_desc.direction() {
+                            Direction::In => usb_reader.ep_in_addr = endpoint_desc.address(),
+                            Direction::Out => usb_reader.ep_out_addr = endpoint_desc.address()
+                        }
+                    }
+                }
+            }
+        }
+        usb_reader.device = Some(device);
+        usb_readers.push(Arc::new(Mutex::new(usb_reader)));
+    }
+
+    usb_readers
 }

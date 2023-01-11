@@ -1,3 +1,4 @@
+//! Crate helpers
 
 pub fn crc16_ex(buf: &Vec<u8>, start: usize, count: usize) -> Vec<u8> {
     let mut crc: u16 = 0xFFFF;

@@ -2,12 +2,23 @@
 name = "uem-reader"
 version = "0.1.0"
 edition = "2021"
+authors = ["Yury Laykov"]
+description = "Library for MicroEM RFID readers"
+documentation = "https://microem.ru/catalog/vstraivaemye_i_gotovye_ustroystva/rfid_schityvateli/"
+readme = "README.md"
+homepage = "https://github.com/LumaRay/uem-reader-rs"
+repository = "https://github.com/LumaRay/uem-reader-rs"
+license = "MIT OR Apache-2.0"
+keywords = ["rfid", "nfc", "mifare", "iso-14443", "iso-15693"]
+categories = ["hardware-support", "embedded", "accessibility", "api-bindings"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = ["std"]
+std = []
 
 [dependencies]
 rusb = "0.9"
-usb-ids = "0.2.4"
+usb-ids = "0.2.5"
 enum-iterator = "1.2.0"
 thiserror = "1.0"
 rand = "0.8.5"

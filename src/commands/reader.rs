@@ -1,38 +1,37 @@
-use crate::commands::*;
-//use crate::commands_reader::*;
+//! Commands relative to control behavior of
+//! a reader itself
+
 use crate::reader::*;
 use crate::errors::*;
 
+/// Structure for commands controlling 
+/// a reader itself
 pub struct UemCommandsReader<'a> {
     reader: &'a UemReader,
 }
 
+/// Accessing reader related commands group
 pub trait UemCommandsReaderTrait {
-    //fn run(&self);
     fn reader(&mut self) -> UemCommandsReader;
 }
 
-impl<'a> UemCommandsReaderTrait for UemCommands<'a> {
-    //fn run(&self) {
-    //    println!("run!");
-    //}
-    
-    fn reader(&mut self) -> UemCommandsReader {
-        UemCommandsReader::new(self.get_reader_ref())
-    }
-}
-
 impl<'a> UemCommandsReader<'a> {
-    // fn new(rd: &'a Arc<Mutex<UemReader<T>>>) -> Self {
-    fn new(rd: &'a UemReader) -> Self {
+    pub(crate) fn new(rd: &'a UemReader) -> Self {
         UemCommandsReader {reader: rd}
     }
-    
-    // fn toast(&self) {
-    //     self.reader.lock().unwrap().count();
-    //     println!("toasting! {:?}", self.reader.lock().unwrap().counter);
-    // }
 
+    /// Make signals of specific count
+    /// 
+    /// # Example
+    /// 
+    /// ```ignore
+    /// // Beep 5 times using command grouping objects as separate variables
+    /// let mut uem_cmds = uem_reader.commands();
+    /// let mut uem_cmds_reader = uem_cmds.reader();
+    /// if uem_cmds_reader.beep(5).is_err() {
+    ///     return;
+    /// }
+    /// ```
     pub fn beep(&mut self, count: i32) -> core::result::Result<(), UemError> {
         if count < 1 || count > 255 {
             return Err(UemError::IncorrectParameter);
