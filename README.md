@@ -10,7 +10,7 @@ Note that in order to work with Windows you need to [install libusb driver first
 
 ## Usage
 
-```
+```rust
     use uem_reader::reader::*;
     use uem_reader::commands::*;
     use uem_reader::commands::reader::*;
