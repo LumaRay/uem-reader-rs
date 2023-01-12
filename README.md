@@ -6,7 +6,7 @@ The crate comes with basic objects and a `send` method used to interact with a r
 
 Currently the crate has been tested with LibUsb on Debian 11.5 x64 and Windows 7x64.
 
-Note that in order to work with Windows you need to [install libusb driver first](https://github.com/libusb/libusb/wiki/Windows#how-to-use-libusb-on-windows)
+Note that in order to work with Windows you need to [install libusb driver first](https://github.com/libusb/libusb/wiki/Windows#how-to-use-libusb-on-windows).
 
 ## Usage
 
