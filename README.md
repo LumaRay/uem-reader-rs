@@ -4,7 +4,9 @@ The library allows control of RFID readers produced by [MicroEM company](https:/
 
 The crate comes with basic objects and a `send` method used to interact with a reader. The byte sequences used in this method should conform with official documentation for the reader which can be found on [MicroEM website.](https://microem.ru)
 
-Currently the crate has been tested with LibUsb on Debian 11.5 x64.
+Currently the crate has been tested with LibUsb on Debian 11.5 x64 and Windows 7x64.
+
+Note that in order to work with Windows you need to [install libusb driver first](https://github.com/libusb/libusb/wiki/Windows#how-to-use-libusb-on-windows)
 
 ## Usage
 
