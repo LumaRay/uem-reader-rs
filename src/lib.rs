@@ -6,5 +6,6 @@
 
 pub mod errors;
 mod helpers;
+pub mod card;
 pub mod reader;
 pub mod commands;

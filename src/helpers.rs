@@ -1,6 +1,6 @@
 //! Crate helpers
 
-pub fn crc16_ex(buf: &Vec<u8>, start: usize, count: usize) -> Vec<u8> {
+pub(crate) fn crc16_ex(buf: &[u8], start: usize, count: usize) -> Vec<u8> {
     let mut crc: u16 = 0xFFFF;
 
     for pos in start..start + count {
@@ -20,12 +20,12 @@ pub fn crc16_ex(buf: &Vec<u8>, start: usize, count: usize) -> Vec<u8> {
     (((crc ^ 0xFFFF_u16) >> 8) & 0x00FF_u16) as u8]
 }
 
-pub fn crc16(buf: &Vec<u8>) -> Vec<u8> {
+pub(crate) fn crc16(buf: &[u8]) -> Vec<u8> {
     let buf_len = buf.len();
     crc16_ex(buf, 0, buf_len)
 }
 
-pub fn byte_stuff(data: &Vec<u8>) -> Vec<u8> {
+pub(crate) fn byte_stuff(data: &[u8]) -> Vec<u8> {
     let mut stuffed_data: Vec<u8> = vec![];
     for data_byte in data {
         if (data_byte & 0xFF) < 0xFD {
@@ -38,7 +38,7 @@ pub fn byte_stuff(data: &Vec<u8>) -> Vec<u8> {
     return stuffed_data;
 }
 
-pub fn unbyte_stuff(stuffed_data: &Vec<u8>) -> Vec<u8> {
+pub(crate) fn unbyte_stuff(stuffed_data: &[u8]) -> Vec<u8> {
     let mut data: Vec<u8> = vec![];
     let mut invert_next = false;
     for data_byte in stuffed_data {
@@ -54,4 +54,12 @@ pub fn unbyte_stuff(stuffed_data: &Vec<u8>) -> Vec<u8> {
         }
     }
     return data;
+}
+
+pub(crate) fn get_absolute_block_address(sector: u8, block: u8) -> u8 {
+	let mut addr = 4 * sector + block;
+	if sector >= 32 {
+		addr += 12 * (sector - 32);
+    }
+	addr
 }

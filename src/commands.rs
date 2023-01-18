@@ -1,9 +1,10 @@
 //! Crate commands object type
 
 pub mod reader;
+pub mod cards;
 
 use crate::reader::*;
-use crate::commands::reader::*;
+use crate::commands::{reader::*, cards::*};
 
 /// Structure for grouping commands in general
 pub struct UemCommands<'a> {
@@ -18,6 +19,12 @@ pub trait UemCommandsTrait {
 impl<'a> UemCommandsReaderTrait for UemCommands<'a> {  
     fn reader(&mut self) -> UemCommandsReader {
         UemCommandsReader::new(self.as_reader())
+    }
+}
+
+impl<'a> UemCommandsCardsTrait for UemCommands<'a> {  
+    fn cards(&mut self) -> UemCommandsCards {
+        UemCommandsCards::new(self.as_reader())
     }
 }
 

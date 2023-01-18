@@ -4,7 +4,7 @@ use enum_iterator::{all, Sequence};
 use thiserror::Error;
 
 #[allow(dead_code)]
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 /// General errors for library methods
 pub enum UemError {
     #[error("Operation in progress")]
@@ -72,7 +72,7 @@ pub enum UemError {
 }
 
 #[repr(u8)]
-#[derive(Debug, PartialEq, Sequence, Clone)]
+#[derive(Debug, PartialEq, Sequence, Clone, Copy)]
 /// Error codes returned by a reader
 pub enum UemInternalError {
     /// No RFID card found in vicinity

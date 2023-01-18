@@ -42,7 +42,7 @@ impl ReaderRs {
 
     #[allow(unused_variables)]
     /// Send command to a reader and receive response
-    pub fn send(&mut self, command: Vec<u8>) -> UemResultVec {
+    pub fn send(&mut self, command: &Vec<u8>) -> UemResultVec {
         Ok(Vec::new())
     }
 }

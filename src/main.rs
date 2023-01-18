@@ -1,73 +1,57 @@
-# Library for RFID readers by MicroEM company
+// test sequentially using cargo test -- --test-threads 1
 
-The library allows control of RFID readers produced by [MicroEM company](https://microem.ru) by implementing a protocol used in these readers.
+mod errors;
+mod helpers;
+mod card;
+mod reader;
+mod commands;
 
-The crate comes with basic objects and a `send` method used to interact with a reader. The byte sequences used in this method should conform with official documentation for the reader which can be found on [MicroEM website.](https://microem.ru)
+use reader::*;
+use commands::*;
+use commands::{
+    reader::*, 
+    cards::*,
+    cards::mifare::*,
+    cards::mifare::classic::*
+};
 
-Currently the crate has been tested with LibUsb on Debian 11.5 x64 and Windows 7x64.
+// https://doc.rust-lang.org/rustdoc/what-is-rustdoc.html
+// cargo doc --no-deps --open
 
-Note that in order to work with Windows you need to [install libusb driver first](https://github.com/libusb/libusb/wiki/Windows#how-to-use-libusb-on-windows).
-
-## Usage
-
-```
-    use uem_reader::{
-        reader::{
-            UemReaderInternal,
-            usb::find_usb_readers
-        },
-        commands::{
-            UemCommandsTrait,
-            reader::UemCommandsReaderTrait, 
-            cards::{
-                UemCommandsCardsTrait,
-                UemActivateParameters,
-                mifare::{
-                    UemCommandsCardsMifareTrait,
-                    classic::UemCommandsCardsMifareClassicTrait
-                },
-            },
-        },
-    };
-
-    // Search system for USB readers
+fn main() {
+//! This is my first rust crate
     let mut uem_readers = find_usb_readers();
 
-    // Quit if no readers found
     if uem_readers.is_empty() {
         return;
     }
 
-    // Pick the first reader in the vector
     let uem_reader = uem_readers.get_mut(0);
 
-    // Check if the vector returned an option with valid reader object
     if uem_reader.is_none() {
         return;
     }
 
-    // Unwrap the option
     let uem_reader = uem_reader.unwrap();
     
-    // Open USB interface connection
     if uem_reader.open().is_err() {
         return;
     }
 
-    // Beep 1 time using command byte vector
-    if uem_reader.send(&vec![0x05_u8, 0x01_u8]).is_err() {
-        return;
-    }
-
-    // Beep 5 times using command grouping objects as separate variables
+    // if uem_reader.transceive(vec![0x05_u8, 0x01_u8]).is_err() {
+    //     return;
+    // }
     let mut uem_cmds = uem_reader.commands();
     let mut uem_cmds_reader = uem_cmds.reader();
     if uem_cmds_reader.beep(5).is_err() {
+        uem_reader.close();
         return;
     }
 
-    // Beep 3 times using command grouping objects inline
+    // if (uem_reader.commands.into() as UemReader<GlobalContext>).beep().is_err() {
+    //if (uem_reader.commands.as_mut()).beep(3).is_err() {
     if uem_reader.commands().reader().beep(3).is_err() {
+        uem_reader.close();
         return;
     }
 
@@ -154,11 +138,5 @@ Note that in order to work with Windows you need to [install libusb driver first
     if uem_reader.close().is_err() {
         return;
     };
-```
 
-## License
-
-This work is dual-licensed under MIT or Apache 2.0.
-You can choose between one of them if you use this work.
-
-`SPDX-License-Identifier: MIT OR Apache-2.0`
+}

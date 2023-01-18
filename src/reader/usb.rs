@@ -1,5 +1,6 @@
 //! USB reader implementation
 
+//use core::slice::SlicePattern;
 use std::sync::{Arc, Mutex};
 use std::{time::Duration};
 use rand::Rng;
@@ -72,7 +73,7 @@ impl<T: UsbContext> UemReaderInternal for ReaderUsb<T> {
     }
 
     /// Send command directly to a USB reader
-    fn send(&mut self, command: Vec<u8>) -> UemResultVec {
+    fn send(&mut self, command: &[u8]) -> UemResultVec {
         
         if self.handle.is_none() {
             return Err(UemError::ReaderNotConnected);
@@ -125,7 +126,7 @@ impl<T: UsbContext> UemReaderInternal for ReaderUsb<T> {
             return Err(UemError::ReaderUnsuccessful(UemInternalError::from_byte(response[1]), Some(response[2..].to_vec())));
         }
 
-        Ok(response)
+        Ok(response[2..].to_vec())
     }
 }
 
