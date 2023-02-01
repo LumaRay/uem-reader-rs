@@ -15,7 +15,7 @@ use std::{time::Duration};
 pub(crate) const TIMEOUT: Duration = Duration::from_secs(1);
 
 /// General reader type using Arc standard type
-pub type UemReader = Arc<Mutex<dyn UemReaderInternal>>;
+pub type UemReader = Arc<Mutex<dyn UemReaderInternalTrait+Send>>;
 /// Vector of readers discovered using specified method
 //pub type UemReaders = Vec<UemReader>;
 
@@ -36,13 +36,13 @@ impl UemCommandsTrait for UemReader {
 }
 
 /// Common reader methods
-pub trait UemReaderInternal {
+pub trait UemReaderInternalTrait {
     fn open(&mut self) -> UemResult;
     fn close(&mut self) -> core::result::Result<(), UemError>;
     fn send(&mut self, command: &[u8]) -> UemResultVec;
 }
 
-impl UemReaderInternal for UemReader {
+impl UemReaderInternalTrait for UemReader {
     /// Open interface with the reader
     /// 
     /// # Example

@@ -40,7 +40,7 @@ impl<T: UsbContext> CommandsCounter for ReaderUsb<T> {
     }
 }
 
-impl<T: UsbContext> UemReaderInternal for ReaderUsb<T> {
+impl<T: UsbContext> UemReaderInternalTrait for ReaderUsb<T> {
     //#![warn(missing_docs)]
     /// Open USB interface
     fn open(&mut self) -> UemResult {
