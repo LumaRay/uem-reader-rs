@@ -44,14 +44,14 @@ fn main() {
     let mut uem_cmds = uem_reader.commands();
     let mut uem_cmds_reader = uem_cmds.reader();
     if uem_cmds_reader.beep(5).is_err() {
-        uem_reader.close();
+        uem_reader.close().expect("quitting...");
         return;
     }
 
     // if (uem_reader.commands.into() as UemReader<GlobalContext>).beep().is_err() {
     //if (uem_reader.commands.as_mut()).beep(3).is_err() {
     if uem_reader.commands().reader().beep(3).is_err() {
-        uem_reader.close();
+        uem_reader.close().expect("quitting...");
         return;
     }
 
@@ -61,7 +61,7 @@ fn main() {
     });
 
     if card.is_err() {
-        uem_reader.close();
+        uem_reader.close().expect("quitting...");
         return;
     }
 
@@ -75,7 +75,7 @@ fn main() {
         );
 
     if res.is_err() {
-        uem_reader.close();
+        uem_reader.close().expect("quitting...");
         return;
     }
 
@@ -83,7 +83,7 @@ fn main() {
         .read(1, 1);
 
     if res.is_err() {
-        uem_reader.close();
+        uem_reader.close().expect("quitting...");
         return;
     }
 
@@ -95,7 +95,7 @@ fn main() {
         .write(new_data.clone(), 1, 1);
 
     if res.is_err() {
-        uem_reader.close();
+        uem_reader.close().expect("quitting...");
         return;
     }
 
@@ -103,13 +103,13 @@ fn main() {
         .read(1, 1);
 
     if res.is_err() {
-        uem_reader.close();
+        uem_reader.close().expect("quitting...");
         return;
     }
 
     if res.unwrap() != new_data {
         println!("error!");
-        uem_reader.close();
+        uem_reader.close().expect("quitting...");
         return;
     }
 
@@ -117,7 +117,7 @@ fn main() {
         .write(prev_data.clone(), 1, 1);
 
     if res.is_err() {
-        uem_reader.close();
+        uem_reader.close().expect("quitting...");
         return;
     }
 
@@ -125,13 +125,13 @@ fn main() {
         .read(1, 1);
 
     if res.is_err() {
-        uem_reader.close();
+        uem_reader.close().expect("quitting...");
         return;
     }
 
     if res.unwrap() != prev_data {
         println!("error!");
-        uem_reader.close();
+        uem_reader.close().expect("quitting...");
         return;
     }
 
