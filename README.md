@@ -9,7 +9,8 @@ Currently the crate has been tested with LibUsb on Debian 11.5 x64 and Windows 7
 Note that in order to work with Windows you need to [install libusb driver first](https://github.com/libusb/libusb/wiki/Windows#how-to-use-libusb-on-windows).
 
 On Linux you need to add write permissions to the device you want to use, e.g.:
-```
+
+```console
 sudo chmod o+w /dev/bus/usb/002/008
 ```
 
@@ -18,7 +19,7 @@ sudo chmod o+w /dev/bus/usb/002/008
 ```rust
     use uem_reader::{
         reader::{
-            UemReaderInternal,
+            UemReaderInternalTrait,
             usb::find_usb_readers
         },
         commands::{

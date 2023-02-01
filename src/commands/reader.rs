@@ -52,7 +52,7 @@ impl<'a> UemCommandsReader<'a> {
     /// # Example
     /// 
     /// ```
-    /// # use uem_reader::reader::{UemReaderInternal, usb::find_usb_readers};
+    /// # use uem_reader::reader::{UemReaderInternalTrait, usb::find_usb_readers};
     /// # use uem_reader::commands::{UemCommandsTrait, reader::*};
     /// # let mut uem_readers = find_usb_readers();
     /// # if uem_readers.is_empty() { return; }
@@ -93,7 +93,7 @@ impl<'a> UemCommandsReader<'a> {
     /// 
     /// ```
     /// # use uem_reader::reader::{
-    ///     UemReaderInternal,
+    ///     UemReaderInternalTrait,
     ///     usb::find_usb_readers};
     /// # use uem_reader::commands::{UemCommandsTrait, reader::*};
     /// # let mut uem_readers = find_usb_readers();
@@ -129,7 +129,7 @@ impl<'a> UemCommandsReader<'a> {
     /// # Example
     /// 
     /// ```
-    /// # use uem_reader::reader::{UemReaderInternal, usb::find_usb_readers};
+    /// # use uem_reader::reader::{UemReaderInternalTrait, usb::find_usb_readers};
     /// # use uem_reader::commands::{UemCommandsTrait, reader::*};
     /// # let mut uem_readers = find_usb_readers();
     /// # if uem_readers.is_empty() { return; }
@@ -172,7 +172,7 @@ impl<'a> UemCommandsReader<'a> {
     /// # Example
     /// 
     /// ```
-    /// # use uem_reader::reader::{UemReaderInternal, usb::find_usb_readers};
+    /// # use uem_reader::reader::{UemReaderInternalTrait, usb::find_usb_readers};
     /// # use uem_reader::commands::{UemCommandsTrait, reader::*};
     /// # let mut uem_readers = find_usb_readers();
     /// # if uem_readers.is_empty() { return; }
@@ -208,7 +208,7 @@ impl<'a> UemCommandsReader<'a> {
     /// # Example
     /// 
     /// ```
-    /// # use uem_reader::reader::{UemReaderInternal, usb::find_usb_readers};
+    /// # use uem_reader::reader::{UemReaderInternalTrait, usb::find_usb_readers};
     /// # use uem_reader::commands::{UemCommandsTrait, reader::*};
     /// # let mut uem_readers = find_usb_readers();
     /// # if uem_readers.is_empty() { return; }
@@ -244,7 +244,7 @@ impl<'a> UemCommandsReader<'a> {
     /// # Example
     /// 
     /// ```
-    /// # use uem_reader::reader::{UemReaderInternal, usb::find_usb_readers};
+    /// # use uem_reader::reader::{UemReaderInternalTrait, usb::find_usb_readers};
     /// # use uem_reader::commands::{UemCommandsTrait, reader::*};
     /// # let mut uem_readers = find_usb_readers();
     /// # if uem_readers.is_empty() { return; }
